@@ -1,0 +1,11 @@
+{
+  "keepCompanies": ["サンプル商事"],
+  "excludeCompanies": ["例示システムズ", "架空コンサルティング", "Example"],
+  "excludeTitles": ["派遣"],
+  "excludeLowCeilingRoles": {
+    "titleKeywords": ["リーダー", "PM", "PMO", "プロジェクトマネージャー", "プロジェクトマネジャー"],
+    "salaryMaxAtMost": 1000
+  },
+  "excludeClosed": false,
+  "dedupe": true
+}

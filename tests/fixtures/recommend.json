@@ -1,0 +1,77 @@
+{
+  "_comment": "getRecommendJobs の実応答の形を元にした匿名化データ（企業名・ID・住所などは架空）",
+  "recommendJobs": [
+    {
+      "jobofferManagementNo": "100000002",
+      "contractGenerationNo": "5",
+      "jobHeading": "【データエンジニア】大規模データ基盤の構築",
+      "annualIncome": {
+        "isConfidential": false,
+        "min": 550,
+        "max": 990
+      },
+      "annualHolidayDays": 123,
+      "jobCharacteristics": {
+        "isIndustryNoneSpecif": true,
+        "isExpNoneSpecif": false,
+        "isFullTimeEmployee": true,
+        "isAnnualHolidayStandardMet": true,
+        "isDayoffSaturday": true,
+        "isDayoffSunday": true,
+        "isOvertimePay": true,
+        "isFlexTime": true
+      },
+      "isNew": true,
+      "isUnread": true,
+      "isAdvisorReferral": false,
+      "isJobMessage": false,
+      "isAiScouted": false,
+      "isHrtechScouted": false,
+      "isInterviewCommitOffer": false,
+      "isQuick": false,
+      "corpName": "株式会社サンプルデータ",
+      "corpCode": "10001",
+      "officeArea": "東京都渋谷区サンプル1-2-3　サンプルビル",
+      "isReceptionClosed": false,
+      "sourceType": "day0",
+      "sendDate": "20261003",
+      "i2a_tstamp": "1790992907"
+    },
+    {
+      "jobofferManagementNo": "100000006",
+      "contractGenerationNo": "10",
+      "jobHeading": "テックリード/VPoE室",
+      "annualIncome": {
+        "isConfidential": false,
+        "min": 600,
+        "max": null
+      },
+      "annualHolidayDays": 120,
+      "jobCharacteristics": {
+        "isIndustryNoneSpecif": true,
+        "isExpNoneSpecif": false,
+        "isFullTimeEmployee": true,
+        "isAnnualHolidayStandardMet": true,
+        "isDayoffSaturday": true,
+        "isDayoffSunday": true,
+        "isOvertimePay": true,
+        "isFlexTime": true
+      },
+      "isNew": false,
+      "isUnread": true,
+      "isAdvisorReferral": false,
+      "isJobMessage": false,
+      "isAiScouted": true,
+      "isHrtechScouted": false,
+      "isInterviewCommitOffer": false,
+      "isQuick": false,
+      "corpName": "合同会社ＥＸＡＭＰＬＥ．ｃｏｍ",
+      "corpCode": "10002",
+      "officeArea": "東京都港区サンプル4-5-6 サンプルタワー",
+      "isReceptionClosed": false,
+      "sourceType": "ai_scouted",
+      "sendDate": "20261003"
+    }
+  ],
+  "nextPageToken": null
+}

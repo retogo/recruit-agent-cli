@@ -1,0 +1,11 @@
+{
+  "hide": {
+    "input": {
+      "jobofferManagementNo": "{{jobId}}",
+      "jobReferralType": "recommendPost"
+    }
+  },
+  "search": {
+    "input": { "filter": "{{filter:json}}", "page_token": "" }
+  }
+}
