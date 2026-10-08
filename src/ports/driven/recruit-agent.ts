@@ -63,7 +63,8 @@ export class MaintenanceError extends Error {
 }
 
 export class SessionExpiredError extends Error {
-  constructor(detail: string) {
+  /** 切れたと判断した理由（HTTP ステータスやリダイレクト先）。CLI 以外は案内文を自前で組み立てる */
+  constructor(readonly detail: string) {
     super(`ログインセッションが無効です（${detail}）。\`ra auth import-curl\` で取り込み直してください。`);
     this.name = "SessionExpiredError";
   }

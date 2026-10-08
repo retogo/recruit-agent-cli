@@ -1,6 +1,6 @@
 # recruit-agent-cli
 
-リクルートエージェントの求人ポスト（mypage.r-agent.com）の非公式 CLI `ra`。使い方は README.md。
+リクルートエージェントの求人ポスト（mypage.r-agent.com）の非公式 CLI `ra` と、同じコードを Cloudflare Workers に載せたリモート MCP サーバー。使い方は README.md。
 
 ## 役割分担
 
@@ -48,13 +48,26 @@ TypeScript（Bun）、Hexagonal。依存方向は `adapters → application → 
 src/
 ├── domain/{job,filter,application,search}.ts  # Job、企業名の正規化、絞り込みルール、選考状況、検索条件
 ├── ports/driven/recruit-agent.ts          # RecruitAgentPort、エラー型
-├── application/{bulk,apply}.ts            # 連続実行（失敗は続行・セッション切れで中断）、応募確認
+├── application/{bulk,apply,targets,job-detail}.ts  # 連続実行、応募確認、ID から紹介経路を補う、詳細の整形
 └── adapters/
-    ├── driving/cli/index.ts               # サブコマンド
+    ├── driving/
+    │   ├── cli/index.ts                   # サブコマンド
+    │   └── mcp/                           # Worker の入口（worker.ts）、OAuth の同意画面、MCP ツール（tools.ts / mcp-server.ts）
     └── driven/
-        ├── session/{store,curl}.ts        # session.json、Copy as cURL の解析
-        └── trpc/{client,procedures,mapper,applied-mapper,referral,rmp-log,recruit-agent}.ts
+        ├── session/{session,store,kv,curl}.ts  # Cookie の更新、session.json（CLI）、KV（Worker）、Copy as cURL の解析
+        └── trpc/{client,procedures,procedures-file,mapper,applied-mapper,referral,rmp-log,recruit-agent}.ts
 ```
+
+- `driving/mcp` と、そこから import するコードは Workers でも動かす。Bun の API（`Bun.file` など）・`node:fs` を使うのは CLI 側（`store.ts`・`procedures-file.ts`・`cli/`）だけにする
+- `tsconfig.json`（Bun の型）は `worker.ts` を除き、`tsconfig.worker.json`（`wrangler types` の型）が Worker の入口から辿れるコードを検査する
+
+## リモート MCP サーバー
+
+- ツールは CLI のコマンドに対応するが、**応募と任意の procedure 呼び出し（`call` / `page`）は持たせない**
+- `list_interviews` は `interviewSummary`（許可した項目だけを写す）を通し、会議 URL・パスコード・面接官・緊急連絡先を返さない
+- `import_session` は Cookie を検証できたときだけ保存し、応答に Cookie を含めない。Cookie はツール1回の終わりにまとめて KV に書く（無料枠の書き込みは1日1000回）
+- `wrangler.jsonc` が設定の正。バインディングを足すときは `terraform/main.tf` にも足す。Terraform は `jsondecode` で読むので `wrangler.jsonc` にコメントを書かない
+- 同意画面（`consent-page.ts`）はクライアントから来た文字列をすべてエスケープし、スクリプトを許さない CSP で返す。`AUTH_PASSWORD` が16文字未満なら認可しない
 
 ## 確認済みの仕様
 
@@ -75,8 +88,10 @@ src/
 
 - **検索**: こだわり条件（リモート可など）と OR・除外キーワードの指定方法
 - **類似求人**: 中身のある応答は未観測
+- **Workers から**: Cloudflare の IP からのアクセスが通るか、セッションが接続元 IP に縛られていないか（実機で未確認）
 
 ## 開発
 
-- `bun test` / `bun run typecheck`
+- `bun test` / `bun run typecheck`（CLI と Worker の両方）/ `bun run build`（Worker）
+- MCP サーバーの手元確認は `bun run dev` と `AUTH_PASSWORD=... scripts/smoke.sh`
 - Bun を使う（node / npm / jest は使わない）

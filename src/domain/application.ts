@@ -66,3 +66,28 @@ export interface Interview {
   otherInfo: string | null;
   updatedAt: string | null;
 }
+
+/** 面接詳細のうち、会話やログに出してよい項目（日時・企業・選考段階・所要時間・選考内容・対策メモ） */
+export type InterviewSummary = Pick<
+  Interview,
+  "scheduleNo" | "company" | "title" | "stage" | "fixedAt" | "startRanges" | "durationMin" | "scheduleCode" | "contents" | "advice"
+>;
+
+/**
+ * 会議 URL・会議 ID・パスコード・面接官・緊急連絡先を落とした面接詳細。
+ * 会議情報は place / visitTo / placeDetail / otherInfo のどれに入るか企業ごとに違うので、許可した項目だけを写す。
+ */
+export function interviewSummary(i: Interview): InterviewSummary {
+  return {
+    scheduleNo: i.scheduleNo,
+    company: i.company,
+    title: i.title,
+    stage: i.stage,
+    fixedAt: i.fixedAt,
+    startRanges: i.startRanges,
+    durationMin: i.durationMin,
+    scheduleCode: i.scheduleCode,
+    contents: i.contents,
+    advice: i.advice,
+  };
+}

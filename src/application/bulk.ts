@@ -22,7 +22,8 @@ export async function runSequential<T extends { id: string }>(
   op: (item: T) => Promise<unknown>,
   opts: BulkOptions,
 ): Promise<ItemResult[]> {
-  const sleep = opts.sleep ?? Bun.sleep;
+  // Worker でも動くよう Bun.sleep ではなく setTimeout で待つ
+  const sleep = opts.sleep ?? ((ms: number) => new Promise<void>((r) => setTimeout(r, ms)));
   const unique = [...new Map(items.map((x) => [x.id, x])).values()];
   const results: ItemResult[] = [];
 

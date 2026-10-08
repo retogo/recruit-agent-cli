@@ -1,0 +1,8 @@
+{
+  "extends": "./tsconfig.json",
+  "compilerOptions": {
+    "types": ["./worker-configuration.d.ts"]
+  },
+  "include": ["src/adapters/driving/mcp/worker.ts", "src/adapters/driving/mcp/env.d.ts"],
+  "exclude": []
+}

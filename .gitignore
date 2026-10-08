@@ -2,3 +2,11 @@ node_modules/
 .claude/worktrees/
 .ra/
 *.local.json
+.wrangler/
+.dev.vars
+dist/
+worker-configuration.d.ts
+terraform/.terraform/
+*.tfstate*
+*.tfvars
+*.tfvars.json

@@ -12,8 +12,8 @@ export interface SearchOptions {
   incomeMin?: number;
 }
 
-export type SearchSort = "relevance" | "newest";
-export const SEARCH_SORTS: SearchSort[] = ["relevance", "newest"];
+export const SEARCH_SORTS = ["relevance", "newest"] as const;
+export type SearchSort = (typeof SEARCH_SORTS)[number];
 
 /**
  * pages.jobSearch.searchJob / totalResultsCount の filter を組み立てる。

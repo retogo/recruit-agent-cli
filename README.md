@@ -2,6 +2,7 @@
 
 リクルートエージェントの求人ポスト（`https://mypage.r-agent.com/recommend`）を操作する**非公式** CLI（`ra`）です。
 個人利用のためのツールで、リクルート社とは関係ありません。
+同じ機能の一部を、Claude などから使えるリモート MCP サーバーとして Cloudflare Workers に置くこともできます（[リモート MCP サーバー](#リモート-mcp-サーバーcloudflare-workers)）。
 
 > [!WARNING]
 > **免責事項**
@@ -258,9 +259,78 @@ IT の中分類: 1106 システムエンジニア / 1111 サーバーサイド /
 - 約0.7秒間隔で60件連続しても制限はかかりませんでした（`--interval` で変更可）
 - 同じ求人が別カードで2回出ることがあります（`dedupe` で除外）
 
+## リモート MCP サーバー（Cloudflare Workers）
+
+同じコードを [MCP](https://modelcontextprotocol.io) サーバーとして Cloudflare Workers（無料プランで足りる）に載せ、
+Claude の Web・デスクトップ・モバイルからコネクタとして使えます。共有のインスタンスはないので、自分の Cloudflare アカウントにデプロイします。
+
+### ツール
+
+| ツール | CLI の相当 | 内容 |
+|---|---|---|
+| `import_session` | `auth import-curl` | 「Copy as cURL」か `PDT2-WEB-SESSION=…` を取り込む。おすすめ一覧が取れたときだけ保存する |
+| `session_status` | `auth status` | セッションが生きているか |
+| `list_recommended_jobs` | `recommend` | おすすめ求人（最大100件） |
+| `list_my_jobs` | `mine` | 閲覧済み・気になる・興味なし |
+| `search_jobs` | `search` | 求人検索。`countOnly` で件数だけ、`withCharacteristics` でこだわり条件を付ける |
+| `show_job` | `show` | 求人詳細（閲覧済み・既読になる） |
+| `list_applications` | `applied` | 選考状況 |
+| `list_interviews` | `interview` | 面接の日時・選考段階・所要時間・選考内容・対策メモ。**会議 URL・パスコード・面接官・緊急連絡先は返さない** |
+| `hide_jobs` / `unhide_jobs` | `hide` / `unhide` | 興味なし（`logOnly` は `--log-only`） |
+| `interest_jobs` / `uninterest_jobs` | `interest` / `uninterest` | 気になる |
+
+書き込み系は `dryRun` で対象を確かめられます。一覧ツールが返した求人オブジェクトをそのまま `jobs` に渡せば一覧を取り直しません（検索結果の求人はこの方法でだけ操作できます）。
+**応募（`apply`）と任意の procedure 呼び出し（`call` / `page`）はありません。** 応募はサイトか CLI で行ってください。
+
+### デプロイ
+
+[Bun](https://bun.sh)、[Terraform](https://developer.hashicorp.com/terraform) 1.6 以上、[jq](https://jqlang.org) が要ります。
+
+```sh
+bun install
+bunx wrangler login                                                  # Cloudflare にログイン（API トークンは不要）
+cp terraform/terraform.tfvars.example terraform/terraform.tfvars     # auth_password（16文字以上）を書く
+terraform -chdir=terraform init
+bun run plan       # 変更の確認
+bun run deploy     # 反映
+```
+
+`auth_password` はクライアントを接続するときの同意画面で入力するパスワードです。
+サーバーは `https://recruit-agent-mcp.<サブドメイン>.workers.dev/mcp` に立ちます。`terraform.tfvars` と Terraform の state は秘密を含むので（どちらも git 管理外）、`terraform/` に置いたままにしてください。
+
+### Claude に接続する
+
+1. Claude の **設定 → コネクタ → カスタムコネクタを追加** で `/mcp` の URL を入れ、**接続** を押す
+2. 同意画面で `claude.ai` が確認済みのクライアントとして出ていることを確かめ、`auth_password` を入れて **許可**
+3. 会話で「求人ポストのセッションを取り込んで」と頼み、ブラウザの DevTools でコピーした「Copy as cURL」を貼る（`import_session`）
+
+ログインセッションは KV に保存し、6時間ごとの Cron で使って延ばします（24時間使わないと切れるため）。
+切れたら手順 3 をやり直します。Cookie はログインそのものなので、貼った会話は共有しないでください。
+
+### 動作確認
+
+```sh
+bun run dev                                       # wrangler dev（:8787、.dev.vars の AUTH_PASSWORD を使う。例は .dev.vars.example）
+AUTH_PASSWORD=... scripts/smoke.sh                # OAuth を通して tools/list と session_status を呼ぶ
+AUTH_PASSWORD=... scripts/smoke.sh https://recruit-agent-mcp.<サブドメイン>.workers.dev
+```
+
+### アクセスの守り方
+
+- MCP クライアントは OAuth 2.1（Client ID Metadata Document か動的クライアント登録）を通す必要があり、許可できるのは `auth_password` を知っている人だけ。パスワードの試行は1分に5回まで
+- ログインの Cookie は Worker の KV にだけ置き、ツールの応答には出さない
+
+### 制約
+
+- Workers からサイトへのアクセスがブロックされないか、セッションが接続元の IP に縛られていないかは、まだ実機で確かめていない
+- Workers Free の CPU 時間は1リクエスト10ms。求人詳細のページ（`show_job`）など大きな応答の解析で超えることがある
+- KV の書き込みは無料プランで1日1000回。Cookie はツール1回の終わりにまとめて1回だけ書く
+- `procedures.json` による入力の上書きは CLI だけ（Worker は既定の入力を使う）
+
 ## 開発
 
 ```bash
 bun test
-bun run typecheck
+bun run typecheck   # CLI（Bun の型）と Worker（wrangler types で作る Workers の型）の両方
+bun run build       # Worker を dist/ にまとめる（Terraform が使う）
 ```

@@ -1,4 +1,4 @@
-import type { Transformer } from "./store.ts";
+import type { Transformer } from "./session.ts";
 
 export interface ParsedCurl {
   url: URL;

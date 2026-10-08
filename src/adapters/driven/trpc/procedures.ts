@@ -1,6 +1,4 @@
-import { join } from "node:path";
 import type { HttpMethod } from "../../../ports/driven/recruit-agent.ts";
-import { configDir } from "../session/store.ts";
 
 export type Action =
   | "recommend"
@@ -130,20 +128,6 @@ export const DEFAULT_PROCEDURES: Record<Action, ProcedureDef> = {
     note: "scheduleAdjustInfoNo は一覧では数値だが、ここでは文字列で渡す。会議 URL は visitPerson か visitPlace に入る（企業による）",
   },
 };
-
-export const proceduresPath = () => join(configDir(), "procedures.json");
-
-export async function loadProcedures(): Promise<Record<Action, ProcedureDef>> {
-  const file = Bun.file(proceduresPath());
-  if (!(await file.exists())) return DEFAULT_PROCEDURES;
-  const overrides: Partial<Record<Action, Partial<ProcedureDef>>> = await file.json();
-  const merged = { ...DEFAULT_PROCEDURES };
-  for (const [action, def] of Object.entries(overrides) as [Action, Partial<ProcedureDef>][]) {
-    if (!(action in DEFAULT_PROCEDURES)) throw new Error(`procedures.json: 未知のアクション "${action}"`);
-    merged[action] = { ...DEFAULT_PROCEDURES[action], ...def, status: "override" };
-  }
-  return merged;
-}
 
 const DROP = Symbol("drop");
 

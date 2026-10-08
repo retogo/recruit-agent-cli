@@ -4,10 +4,12 @@ import { createInterface } from "node:readline/promises";
 import { parseArgs } from "node:util";
 import { applyWithConfirmation } from "../../../application/apply.ts";
 import { runSequential } from "../../../application/bulk.ts";
+import { detailSummary, jobDetailView } from "../../../application/job-detail.ts";
+import { applicationAsJob, resolveTargets } from "../../../application/targets.ts";
 import { APPLIED_STATUSES, type Application, type AppliedStatus } from "../../../domain/application.ts";
 import { applyFilter, type FilterRules } from "../../../domain/filter.ts";
 import { buildSearchFilter, SEARCH_SORTS, type SearchSort } from "../../../domain/search.ts";
-import type { Job, JobRef } from "../../../domain/job.ts";
+import { type Job, type JobRef, stripRaw } from "../../../domain/job.ts";
 import {
   type HttpMethod,
   MY_JOBS_TYPES,
@@ -20,7 +22,7 @@ import {
 import { extractTrpcCalls, parseCurl, replayableHeaders } from "../../driven/session/curl.ts";
 import { configDir, loadSession, saveSession, writePrivate } from "../../driven/session/store.ts";
 import { BASE_URL, TrpcClient } from "../../driven/trpc/client.ts";
-import { loadProcedures, proceduresPath } from "../../driven/trpc/procedures.ts";
+import { loadProcedures, proceduresPath } from "../../driven/trpc/procedures-file.ts";
 import { TrpcRecruitAgent } from "../../driven/trpc/recruit-agent.ts";
 import { referralTypeOf } from "../../driven/trpc/referral.ts";
 
@@ -116,113 +118,6 @@ export function parseTargets(text: string): Partial<Job>[] {
     }
     return [job];
   });
-}
-
-/** 求人 ID から表示用の情報と紹介経路を引く表。おすすめ一覧を優先し、なければ気になる一覧を見る */
-async function lookupJobs(port: RecruitAgentPort, ids: string[]): Promise<Map<string, Job>> {
-  const known = new Map<string, Job>();
-  log("おすすめ一覧から紹介経路を取得しています…");
-  for (const job of stripRaw((await port.recommendJobs(4)).jobs)) known.set(job.id, job);
-  if (ids.some((id) => !known.has(id))) {
-    log("気になる一覧から紹介経路を取得しています…");
-    for (const job of stripRaw((await port.myJobs("interest")).jobs)) if (!known.has(job.id)) known.set(job.id, job);
-  }
-  if (ids.some((id) => !known.has(id))) {
-    log("選考状況から紹介経路を取得しています…");
-    for (const status of APPLIED_STATUSES) {
-      for (const a of await port.applied(status)) if (!known.has(a.id)) known.set(a.id, applicationAsJob(a));
-    }
-  }
-  return known;
-}
-
-/**
- * 応募した求人を、詳細ページを開ける Job の形にする。
- * 選考状況の画面は詳細へのリンクに job_referral=recommendPost と generation_no を付けている。
- * 応募済みなので興味なし・気になるの対象にはならない想定。
- */
-function applicationAsJob(a: Application): Job {
-  return {
-    id: a.id,
-    company: a.company,
-    title: a.title,
-    salaryMin: null,
-    salaryMax: null,
-    location: null,
-    closed: a.status === "closed",
-    sourceType: null,
-    referralType: "recommendPost",
-    i2aTstamp: null,
-    generationNo: a.generationNo,
-    tracking: null,
-  };
-}
-
-/**
- * 紹介経路や表示情報が分からない対象を、おすすめ一覧・気になる一覧から補う。
- * 見つからなければ null のまま（紹介経路が要る操作はエラーになり、行動ログは送らない）。
- */
-async function resolveTargets(port: RecruitAgentPort, targets: Partial<Job>[]): Promise<Job[]> {
-  const missing = (t: Partial<Job>) => t.referralType === undefined || t.tracking === undefined;
-  const known = targets.some(missing) ? await lookupJobs(port, targets.map((t) => t.id!)) : new Map<string, Job>();
-  return targets.map((t) => {
-    const hit = known.get(t.id!);
-    if (missing(t) && hit) return hit;
-    return {
-      id: t.id!,
-      company: t.company ?? hit?.company ?? "",
-      title: t.title ?? hit?.title ?? "",
-      salaryMin: t.salaryMin ?? hit?.salaryMin ?? null,
-      salaryMax: t.salaryMax ?? hit?.salaryMax ?? null,
-      location: t.location ?? hit?.location ?? null,
-      closed: t.closed ?? hit?.closed ?? false,
-      sourceType: t.sourceType ?? hit?.sourceType ?? null,
-      referralType: t.referralType ?? null,
-      i2aTstamp: t.i2aTstamp ?? null,
-      generationNo: t.generationNo ?? hit?.generationNo ?? null,
-      tracking: t.tracking ?? null,
-    };
-  });
-}
-
-/** 詳細ページのデータのうち、求人の中身ではないもの（A/B テスト・ログ・画面制御） */
-const DETAIL_NOISE = [
-  "__deviceTypeDefaultState",
-  "__loginSucceeded",
-  "abTestData",
-  "applyWithJobExtraParameter",
-  "extraParameter",
-  "forceBackToDefaultPath",
-  "interestedJobIds",
-  "isDisplayConfirmApplyDialogForEntryWithJob",
-  "isDisplayConfirmApplyDialogForJobApply",
-  "isDisplayConfirmDialog",
-  "isScoutAcceptanceConfirmationTarget",
-  "matchingCriteriaData",
-  "referer",
-  "requestId",
-  "rmpLogPageViewData",
-];
-
-/** 詳細ページから、選考状況の一覧に足りない項目（年収・職種・勤務地・休日）を抜き出す */
-function detailSummary(d: Record<string, unknown>) {
-  const p = d as {
-    workCondition?: {
-      salary?: { annualIncome?: { min?: number | null; max?: number | null }; unpublishedAnnualIncome?: boolean };
-      dayoffAnnualDayCount?: number | null;
-    };
-    jobRequirements?: { occupations?: string[] };
-    workLocation?: { offices?: { prefectureCityName?: string }[] };
-  };
-  const income = p.workCondition?.salary?.annualIncome;
-  return {
-    salaryMin: income?.min ?? null,
-    salaryMax: income?.max ?? null,
-    salaryUnpublished: p.workCondition?.salary?.unpublishedAnnualIncome === true,
-    occupations: p.jobRequirements?.occupations ?? [],
-    locations: [...new Set((p.workLocation?.offices ?? []).map((o) => o.prefectureCityName).filter(Boolean))],
-    annualHolidays: p.workCondition?.dayoffAnnualDayCount ?? null,
-  };
 }
 
 async function applied(argv: string[]): Promise<number> {
@@ -322,8 +217,8 @@ async function show(argv: string[]): Promise<number> {
     values.referral && values.generation
       ? await resolveTargets(port, [
           { id, referralType: values.referral, generationNo: values.generation, i2aTstamp: null, tracking: null },
-        ])
-      : await resolveTargets(port, [{ id }]);
+        ], log)
+      : await resolveTargets(port, [{ id }], log);
   if (!job?.referralType) {
     log(
       `求人 ${id} がおすすめ一覧・気になる一覧・選考状況に見つからないため、詳細ページの URL を組み立てられません。` +
@@ -332,13 +227,9 @@ async function show(argv: string[]): Promise<number> {
     return 1;
   }
   const detail = await port.jobDetail(job);
-  const shown = values.raw ? detail : Object.fromEntries(Object.entries(detail).filter(([k]) => !DETAIL_NOISE.includes(k)));
+  const shown = values.raw ? detail : jobDetailView(detail);
   await output(shown, values.out);
   return 0;
-}
-
-function stripRaw(jobs: Job[]): Job[] {
-  return jobs.map(({ raw, ...rest }) => rest);
 }
 
 async function connect(): Promise<RecruitAgentPort> {
@@ -455,7 +346,7 @@ async function bulk(
 
   const port = await connect();
   const jobs: JobRef[] = needsReferral
-    ? await resolveTargets(port, targets)
+    ? await resolveTargets(port, targets, log)
     : targets.map((t) => ({ id: t.id!, referralType: null, i2aTstamp: null, tracking: null }));
   if (values["dry-run"]) {
     await output({ action: name, dryRun: true, targets: [...new Map(jobs.map((j) => [j.id, j])).values()] });
@@ -495,7 +386,7 @@ async function apply(argv: string[]): Promise<number> {
     return 2;
   }
   const port = await connect();
-  const [job] = await resolveTargets(port, [{ id }]);
+  const [job] = await resolveTargets(port, [{ id }], log);
   if (!job?.referralType) {
     log(`求人 ${id} がおすすめ一覧・気になる一覧・選考状況に見つからないため、紹介経路を決められません`);
     return 1;

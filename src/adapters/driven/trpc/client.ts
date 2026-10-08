@@ -4,7 +4,7 @@ import {
   ProcedureError,
   SessionExpiredError,
 } from "../../../ports/driven/recruit-agent.ts";
-import { mergeSetCookies, type Session } from "../session/store.ts";
+import { mergeSetCookies, type Session } from "../session/session.ts";
 
 export const BASE_URL = "https://mypage.r-agent.com";
 

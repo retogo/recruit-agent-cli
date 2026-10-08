@@ -44,6 +44,11 @@ export type JobRef = Pick<Job, "id" | "referralType" | "i2aTstamp" | "tracking">
 /** 詳細ページの対象。JobRef に版番号を加えたもの */
 export type JobDetailRef = JobRef & Pick<Job, "generationNo">;
 
+/** 出力用に API の元データを外す */
+export function stripRaw(jobs: Job[]): Job[] {
+  return jobs.map(({ raw, ...rest }) => rest);
+}
+
 const CORPORATE_SUFFIXES = [
   "株式会社",
   "合同会社",
